@@ -1,6 +1,6 @@
 'use client';
 
-import { Component, ReactNode, useEffect } from 'react';
+import { Component, ReactNode, Suspense, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useFormState } from '@/hooks/useFormState';
@@ -41,7 +41,15 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   }
 }
 
-export default function FormBuilder() {
+// Placeholder loading component for Suspense
+const FormBuilderLoading = () => (
+  <div className="min-h-screen bg-gradient-to-b from-deep-purple to-teal flex items-center justify-center">
+    <p className="text-neon-cyan text-xl">Loading form builder...</p>
+  </div>
+);
+
+// Main Form Builder content component
+const FormBuilderContent = () => {
   const searchParams = useSearchParams();
   const formId = searchParams.get('id');
   const { formData, setFormData, handleBasicInfoChange, handleQuestionChange, addQuestion, removeQuestion } = useFormState();
@@ -537,5 +545,14 @@ export default function FormBuilder() {
         </div>
       </main>
     </ErrorBoundary>
+  );
+};
+
+// Default export wrapped in Suspense
+export default function FormBuilder() {
+  return (
+    <Suspense fallback={<FormBuilderLoading />}>
+      <FormBuilderContent />
+    </Suspense>
   );
 }
