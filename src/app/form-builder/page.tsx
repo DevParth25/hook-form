@@ -1,6 +1,6 @@
 'use client';
 
-import { Component, ReactNode, Suspense, useEffect } from 'react';
+import { Component, ReactNode, Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useFormState } from '@/hooks/useFormState';
@@ -22,13 +22,13 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-gradient-to-b from-deep-purple to-teal font-sans text-white flex items-center justify-center">
-          <div className="bg-white/10 backdrop-blur-md p-6 rounded-lg border border-neon-pink shadow-neon-pink">
-            <h1 className="text-xl font-orbitron text-neon-pink">Something went wrong.</h1>
-            <p className="mt-2 text-neon-cyan">{this.state.error}</p>
+        <div className="min-h-screen bg-form-bg font-roboto text-form-text flex items-center justify-center">
+          <div className="bg-form-card p-6 rounded-lg border border-form-border shadow-form-card">
+            <h1 className="text-xl font-bold text-form-error">Something went wrong.</h1>
+            <p className="mt-2 text-form-secondary">{this.state.error}</p>
             <button
               onClick={() => this.setState({ hasError: false, error: '' })}
-              className="mt-4 px-4 py-2 bg-neon-pink text-white rounded-md hover:bg-neon-pink/80 hover:shadow-neon-pink transition-all"
+              className="mt-4 px-4 py-2 bg-form-blue text-white rounded-md hover:bg-form-blue-light hover:text-form-blue transition-all"
             >
               Try Again
             </button>
@@ -43,8 +43,50 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 
 // Placeholder loading component for Suspense
 const FormBuilderLoading = () => (
-  <div className="min-h-screen bg-gradient-to-b from-deep-purple to-teal flex items-center justify-center">
-    <p className="text-neon-cyan text-xl">Loading form builder...</p>
+  <div className="min-h-screen bg-form-bg flex items-center justify-center">
+    <p className="text-form-text text-xl">Loading form builder...</p>
+  </div>
+);
+
+// Form Preview Component
+const FormPreview = ({ formData }: { formData: FormData }) => (
+  <div className="bg-form-card p-6 rounded-lg border border-form-border shadow-form-card">
+    <h2 className="text-xl font-bold text-form-purple mb-4">{formData.name || 'Untitled Form'}</h2>
+    <p className="text-form-secondary mb-4">{formData.description || 'No description'}</p>
+    {formData.questions.map((question) => (
+      <div key={question.id} className="mb-4">
+        <h3 className="text-form-text font-medium">
+          {question.title} {question.isRequired && <span className="text-form-error">*</span>}
+        </h3>
+        <p className="text-sm text-form-secondary">{question.description}</p>
+        {question.type === 'score' ? (
+          <div className="mt-2">
+            {question.scoreRanges?.map((range, i) => (
+              <div key={i} className="flex items-center space-x-2">
+                <input type="radio" disabled className="h-4 w-4 text-form-blue" />
+                <span className="text-form-text">{range.title} ({range.min}–{range.max})</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-2">
+            {question.checkboxOptions?.map((option, i) => (
+              <div key={i} className="flex items-center space-x-2">
+                <input type="checkbox" disabled className="h-4 w-4 text-form-blue" />
+                <span className="text-form-text">{option}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {question.hasComments && (
+          <textarea
+            className="mt-2 w-full p-2 bg-form-card border border-form-border rounded-md text-form-text"
+            placeholder="Comments..."
+            disabled
+          />
+        )}
+      </div>
+    ))}
   </div>
 );
 
@@ -58,6 +100,7 @@ const FormBuilderContent = () => {
   const { errors, setErrors, validateForm } = useFormValidation(formData, scoreRangeInputs, newOptionInputs);
   const { isSubmitting, apiError, handleSubmit } = useFormSubmission(formData);
   const { isNavOpen, toggleNav, closeNav } = useNavigation();
+  const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
     if (formId) {
@@ -90,51 +133,78 @@ const FormBuilderContent = () => {
     }
   }, [formId, setFormData]);
 
-  // Modified handleBasicInfoChange to clear errors
+  // Real-time validation for form name and description
   const handleBasicInfoChangeWithErrors = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     handleBasicInfoChange(e);
+    const { name, value } = e.target;
     setErrors((prev: FormErrors) => ({
       ...prev,
-      [e.target.name]: undefined,
+      [name]: value.trim() ? undefined : `${name.charAt(0).toUpperCase() + name.slice(1)} is required`,
     }));
   };
 
-  // Modified handleQuestionChange to clear question-specific errors
+  // Real-time validation for question fields
   const handleQuestionChangeWithErrors = (
     index: number,
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     handleQuestionChange(index, e);
-    const name = e.target.name;
+    const { name, value } = e.target;
     setErrors((prev: FormErrors) => {
       const newErrors: FormErrors = { ...prev, questions: [...prev.questions] };
-      newErrors.questions[index] = { ...newErrors.questions[index], [name]: undefined };
+      newErrors.questions[index] = {
+        ...newErrors.questions[index],
+        [name]: value.trim() ? undefined : `${name.charAt(0).toUpperCase() + name.slice(1)} is required`,
+      };
       return newErrors;
     });
   };
 
+  // Reset form
+  const handleReset = () => {
+    setFormData({
+      id: '',
+      name: '',
+      description: '',
+      questions: [{ id: Math.random().toString(), title: '', description: '', type: 'score', isRequired: false, hasComments: false }],
+    });
+    setErrors({ questions: [] });
+  };
+
   return (
     <ErrorBoundary>
-      <main className="min-h-screen bg-gradient-to-b from-deep-purple to-teal font-sans text-white">
-        <nav className="fixed top-0 left-0 right-0 bg-deep-purple text-white shadow-lg z-20">
+      <main className="min-h-screen bg-form-bg font-roboto text-form-text">
+        <nav className="fixed top-0 left-0 right-0 bg-form-card text-form-text shadow-form-card z-20">
           <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-            <h1 className="text-xl font-bold font-orbitron bg-gradient-to-r from-neon-pink to-neon-cyan bg-clip-text text-transparent">
-              Form Builder
-            </h1>
+            <div className="flex items-center space-x-2">
+              <svg className="w-6 h-6 text-form-purple" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M6 2h12a2 2 0 012 2v16a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2zm0 2v16h12V4H6zm6 3a1 1 0 011 1v8a1 1 0 01-2 0V8a1 1 0 011-1z" />
+              </svg>
+              <h1 className="text-xl font-bold text-form-purple">Form Builder</h1>
+            </div>
             <div className="hidden md:flex items-center space-x-4">
+              <button
+                type="button"
+                onClick={() => setShowPreview(!showPreview)}
+                className="px-3 py-1 text-sm border border-form-border rounded-md hover:bg-form-blue-light hover:text-form-blue transition-colors"
+                aria-label={showPreview ? 'Hide preview' : 'Show preview'}
+              >
+                {showPreview ? 'Edit Form' : 'Preview Form'}
+              </button>
               <Link
-                href="/forms"
-                className="px-3 py-1 text-sm hover:bg-neon-pink hover:text-white rounded-md transition-colors"
+                href="/"
+                className="px-3 py-1 text-sm hover:bg-form-blue-light hover:text-form-blue rounded-md transition-colors"
               >
                 Back to Forms
               </Link>
               <button
                 type="button"
                 onClick={(e) => handleSubmit(e, validateForm)}
-                className="px-4 py-1 bg-neon-pink text-white rounded-md hover:bg-neon-pink/80 hover:shadow-neon-pink transition-all disabled:opacity-50"
+                className="px-4 py-1 bg-form-blue text-white rounded-md hover:bg-form-blue-light hover:text-form-blue transition-all disabled:opacity-50"
                 disabled={isSubmitting}
+                aria-label={formData.id ? 'Update form' : 'Save form'}
               >
                 {isSubmitting ? 'Saving...' : formData.id ? 'Update Form' : 'Save Form'}
               </button>
@@ -142,7 +212,7 @@ const FormBuilderContent = () => {
             <button
               className="md:hidden p-2"
               onClick={toggleNav}
-              aria-label="Toggle Navigation"
+              aria-label="Toggle navigation"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -155,10 +225,18 @@ const FormBuilderContent = () => {
             </button>
           </div>
           {isNavOpen && (
-            <div className="md:hidden bg-deep-purple/90 px-4 py-2">
+            <div className="md:hidden bg-form-card px-4 py-2">
+              <button
+                type="button"
+                onClick={() => setShowPreview(!showPreview)}
+                className="block py-2 text-sm hover:bg-form-blue-light hover:text-form-blue rounded-md transition-colors"
+                aria-label={showPreview ? 'Hide preview' : 'Show preview'}
+              >
+                {showPreview ? 'Edit Form' : 'Preview Form'}
+              </button>
               <Link
-                href="/forms"
-                className="block py-2 text-sm hover:bg-neon-pink hover:text-white rounded-md transition-colors"
+                href="/"
+                className="block py-2 text-sm hover:bg-form-blue-light hover:text-form-blue rounded-md transition-colors"
                 onClick={closeNav}
               >
                 Back to Forms
@@ -166,8 +244,9 @@ const FormBuilderContent = () => {
               <button
                 type="button"
                 onClick={(e) => handleSubmit(e, validateForm)}
-                className="w-full text-left py-2 text-sm bg-neon-pink text-white rounded-md hover:bg-neon-pink/80 hover:shadow-neon-pink transition-all disabled:opacity-50"
+                className="w-full text-left py-2 text-sm bg-form-blue text-white rounded-md hover:bg-form-blue-light hover:text-form-blue transition-all disabled:opacity-50"
                 disabled={isSubmitting}
+                aria-label={formData.id ? 'Update form' : 'Save form'}
               >
                 {isSubmitting ? 'Saving...' : formData.id ? 'Update Form' : 'Save Form'}
               </button>
@@ -177,371 +256,405 @@ const FormBuilderContent = () => {
 
         <div className="pt-20 max-w-3xl mx-auto px-4 py-6">
           {apiError && (
-            <div className="mb-4 p-4 bg-red-500/20 border border-red-500 text-red-500 rounded-md backdrop-blur-md">
+            <div className="mb-4 p-4 bg-red-100 border border-form-error text-form-error rounded-md">
               {apiError}
             </div>
           )}
-          <form onSubmit={(e) => handleSubmit(e, validateForm)}>
-            <section className="mb-8 bg-white/10 backdrop-blur-md p-6 rounded-lg border border-neon-pink shadow-neon-pink">
-              <h2 className="text-lg font-orbitron bg-gradient-to-r from-neon-pink to-neon-cyan bg-clip-text text-transparent mb-4">
-                Form Details
-              </h2>
-              <div className="space-y-4">
-                <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-neon-cyan">
-                    Form Name
-                  </label>
-                  <input
-                    type="text"
-                    id="name"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleBasicInfoChangeWithErrors}
-                    className={`mt-1 w-full p-2 bg-white/5 border ${
-                      errors.name ? 'border-red-500' : 'border-neon-pink'
-                    } rounded-md text-white focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan focus:shadow-neon-cyan transition-all`}
-                    required
-                  />
-                  {errors.name && <p className="mt-1 text-sm text-red-500">{errors.name}</p>}
-                </div>
-                <div>
-                  <label htmlFor="description" className="block text-sm font-medium text-neon-cyan">
-                    Form Description
-                  </label>
-                  <textarea
-                    id="description"
-                    name="description"
-                    value={formData.description}
-                    onChange={handleBasicInfoChangeWithErrors}
-                    className={`mt-1 w-full p-2 bg-white/5 border ${
-                      errors.description ? 'border-red-500' : 'border-neon-pink'
-                    } rounded-md text-white focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan focus:shadow-neon-cyan transition-all`}
-                    rows={3}
-                    required
-                  />
-                  {errors.description && (
-                    <p className="mt-1 text-sm text-red-500">{errors.description}</p>
-                  )}
-                </div>
-              </div>
-            </section>
 
-            <section className="space-y-6">
-              <h2 className="text-lg font-orbitron bg-gradient-to-r from-neon-pink to-neon-cyan bg-clip-text text-transparent">
-                Questions
-              </h2>
-              {formData.questions.map((question, index) => (
-                <div
-                  key={question.id}
-                  className="bg-white/10 backdrop-blur-md p-6 rounded-lg border border-neon-pink shadow-neon-pink relative"
-                >
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div>
-                      <label
-                        htmlFor={`title-${index}`}
-                        className="block text-sm font-medium text-neon-cyan"
-                      >
-                        Question Title
-                      </label>
-                      <input
-                        type="text"
-                        id={`title-${index}`}
-                        name="title"
-                        value={question.title}
-                        onChange={(e) => handleQuestionChangeWithErrors(index, e)}
-                        className={`mt-1 w-full p-2 bg-white/5 border ${
-                          errors.questions?.[index]?.title ? 'border-red-500' : 'border-neon-pink'
-                        } rounded-md text-white focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan focus:shadow-neon-cyan transition-all`}
-                        required
-                      />
-                      {errors.questions?.[index]?.title && (
-                        <p className="mt-1 text-sm text-red-500">
-                          {errors.questions[index].title}
-                        </p>
-                      )}
-                    </div>
-                    <div className="relative">
-                      <label
-                        htmlFor={`type-${index}`}
-                        className="block text-sm font-medium text-neon-cyan"
-                      >
-                        Question Type
-                      </label>
-                      <select
-                        id={`type-${index}`}
-                        name="type"
-                        value={question.type}
-                        onChange={(e) => handleQuestionChangeWithErrors(index, e)}
-                        className="mt-1 w-full select-custom"
-                      >
-                        <option value="score" className="select-option-hover">Score</option>
-                        <option value="checkbox" className="select-option-hover">Checkbox</option>
-                      </select>
-                      <div className="select-arrow" />
-                    </div>
-                  </div>
-                  <div className="mt-4">
-                    <label
-                      htmlFor={`description-${index}`}
-                      className="block text-sm font-medium text-neon-cyan"
-                    >
-                      Question Description
+          {showPreview ? (
+            <FormPreview formData={formData} />
+          ) : (
+            <form onSubmit={(e) => handleSubmit(e, validateForm)}>
+              <section className="mb-8 bg-form-card p-6 rounded-lg border border-form-border shadow-form-card">
+                <h2 className="text-lg font-bold text-form-purple mb-4">Form Details</h2>
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="name" className="block text-sm font-medium text-form-secondary">
+                      Form Name
+                      <span className="text-form-error">*</span>
                     </label>
-                    <textarea
-                      id={`description-${index}`}
-                      name="description"
-                      value={question.description}
-                      onChange={(e) => handleQuestionChangeWithErrors(index, e)}
-                      className={`mt-1 w-full p-2 bg-white/5 border ${
-                        errors.questions?.[index]?.description ? 'border-red-500' : 'border-neon-pink'
-                      } rounded-md text-white focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan focus:shadow-neon-cyan transition-all`}
-                      rows={2}
+                    <input
+                      type="text"
+                      id="name"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleBasicInfoChangeWithErrors}
+                      className={`mt-1 w-full p-2 bg-form-card border ${
+                        errors.name ? 'border-form-error' : 'border-form-border'
+                      } rounded-md text-form-text focus:ring-2 focus:ring-form-blue focus:border-form-blue transition-all`}
                       required
+                      aria-describedby="name-error"
                     />
-                    {errors.questions?.[index]?.description && (
-                      <p className="mt-1 text-sm text-red-500">
-                        {errors.questions[index].description}
+                    {errors.name && (
+                      <p id="name-error" className="mt-1 text-sm text-form-error">
+                        {errors.name}
                       </p>
                     )}
                   </div>
-                  {question.type === 'score' ? (
-                    <div className="mt-4">
-                      <label className="block text-sm font-medium text-neon-cyan">
-                        Score Ranges
-                      </label>
-                      {errors.questions?.[index]?.scoreRanges && (
-                        <p className="mt-1 text-sm text-red-500">
-                          {errors.questions[index].scoreRanges}
-                        </p>
-                      )}
-                      <div className="mt-2 space-y-4">
-                        {scoreRangeInputs[index]?.map((range, rangeIndex) => (
-                          <div key={rangeIndex} className="flex items-center space-x-2">
-                            <div className="flex-1">
-                              <label
-                                htmlFor={`range-title-${index}-${rangeIndex}`}
-                                className="block text-sm font-medium text-neon-cyan"
-                              >
-                                Range Title
-                              </label>
-                              <input
-                                type="text"
-                                id={`range-title-${index}-${rangeIndex}`}
-                                value={range.title}
-                                onChange={(e) =>
-                                  handleScoreRangeInput(index, rangeIndex, 'title', e.target.value)
-                                }
-                                className="mt-1 w-full p-2 bg-white/5 border border-neon-pink rounded-md text-white focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan focus:shadow-neon-cyan transition-all"
-                                placeholder={`Range ${rangeIndex + 1} Title`}
-                              />
-                            </div>
-                            <div className="w-20">
-                              <label
-                                htmlFor={`min-${index}-${rangeIndex}`}
-                                className="block text-sm font-medium text-neon-cyan"
-                              >
-                                Start Range
-                              </label>
-                              <input
-                                type="text"
-                                pattern="[0-9]*"
-                                id={`min-${index}-${rangeIndex}`}
-                                value={range.min === '' ? '' : range.min}
-                                onChange={(e) =>
-                                  handleScoreRangeInput(index, rangeIndex, 'min', e.target.value)
-                                }
-                                onBlur={() => handleScoreRangeBlur(index, rangeIndex, 'min')}
-                                className="mt-1 w-full p-2 bg-white/5 border border-neon-pink rounded-md text-white focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan focus:shadow-neon-cyan transition-all"
-                                placeholder="Start Range"
-                              />
-                            </div>
-                            <div className="w-20">
-                              <label
-                                htmlFor={`max-${index}-${rangeIndex}`}
-                                className="block text-sm font-medium text-neon-cyan"
-                              >
-                                End Range
-                              </label>
-                              <input
-                                type="text"
-                                pattern="[0-9]*"
-                                id={`max-${index}-${rangeIndex}`}
-                                value={range.max === '' ? '' : range.max}
-                                onChange={(e) =>
-                                  handleScoreRangeInput(index, rangeIndex, 'max', e.target.value)
-                                }
-                                onBlur={() => handleScoreRangeBlur(index, rangeIndex, 'max')}
-                                className="mt-1 w-full p-2 bg-white/5 border border-neon-pink rounded-md text-white focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan focus:shadow-neon-cyan transition-all"
-                                placeholder="End Range"
-                              />
-                            </div>
-                            {rangeIndex > 0 && (
-                              <button
-                                type="button"
-                                onClick={() => removeScoreRangeInput(index, rangeIndex)}
-                                className="w-8 h-8 flex items-center justify-center border border-neon-pink text-neon-pink rounded-full hover:bg-neon-pink hover:text-white hover:shadow-neon-pink transition-all"
-                                aria-label="Remove Score Range"
-                              >
-                                −
-                              </button>
-                            )}
-                            {rangeIndex === scoreRangeInputs[index].length - 1 && (
-                              <button
-                                type="button"
-                                onClick={() => addScoreRange(index)}
-                                className="w-8 h-8 flex items-center justify-center border border-neon-pink text-neon-pink rounded-full hover:bg-neon-pink hover:text-white hover:shadow-neon-pink transition-all"
-                                aria-label="Add Score Range"
-                              >
-                                +
-                              </button>
-                            )}
-                          </div>
-                        ))}
+                  <div>
+                    <label htmlFor="description" className="block text-sm font-medium text-form-secondary">
+                      Form Description
+                      <span className="text-form-error">*</span>
+                    </label>
+                    <textarea
+                      id="description"
+                      name="description"
+                      value={formData.description}
+                      onChange={handleBasicInfoChangeWithErrors}
+                      className={`mt-1 w-full p-2 bg-form-card border ${
+                        errors.description ? 'border-form-error' : 'border-form-border'
+                      } rounded-md text-form-text focus:ring-2 focus:ring-form-blue focus:border-form-blue transition-all`}
+                      rows={3}
+                      required
+                      aria-describedby="description-error"
+                    />
+                    {errors.description && (
+                      <p id="description-error" className="mt-1 text-sm text-form-error">
+                        {errors.description}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </section>
+
+              <section className="space-y-6">
+                <h2 className="text-lg font-bold text-form-purple">Questions</h2>
+                {formData.questions.map((question, index) => (
+                  <div
+                    key={question.id}
+                    className="bg-form-card p-6 rounded-lg border border-form-border shadow-form-card relative"
+                  >
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <label
+                          htmlFor={`title-${index}`}
+                          className="block text-sm font-medium text-form-secondary"
+                        >
+                          Question Title
+                          <span className="text-form-error">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          id={`title-${index}`}
+                          name="title"
+                          value={question.title}
+                          onChange={(e) => handleQuestionChangeWithErrors(index, e)}
+                          className={`mt-1 w-full p-2 bg-form-card border ${
+                            errors.questions?.[index]?.title ? 'border-form-error' : 'border-form-border'
+                          } rounded-md text-form-text focus:ring-2 focus:ring-form-blue focus:border-form-blue transition-all`}
+                          required
+                          aria-describedby={`title-error-${index}`}
+                        />
+                        {errors.questions?.[index]?.title && (
+                          <p id={`title-error-${index}`} className="mt-1 text-sm text-form-error">
+                            {errors.questions[index].title}
+                          </p>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <label
+                          htmlFor={`type-${index}`}
+                          className="block text-sm font-medium text-form-secondary"
+                        >
+                          Question Type
+                        </label>
+                        <select
+                          id={`type-${index}`}
+                          name="type"
+                          value={question.type}
+                          onChange={(e) => handleQuestionChangeWithErrors(index, e)}
+                          className="mt-1 w-full select-custom"
+                          aria-label="Select question type"
+                        >
+                          <option value="score" className="select-option-hover">Score</option>
+                          <option value="checkbox" className="select-option-hover">Checkbox</option>
+                        </select>
+                        <div className="select-arrow" />
                       </div>
                     </div>
-                  ) : (
                     <div className="mt-4">
-                      <label className="block text-sm font-medium text-neon-cyan">
-                        Checkbox Options
+                      <label
+                        htmlFor={`description-${index}`}
+                        className="block text-sm font-medium text-form-secondary"
+                      >
+                        Question Description
+                        <span className="text-form-error">*</span>
                       </label>
-                      {errors.questions?.[index]?.options && (
-                        <p className="mt-1 text-sm text-red-500">
-                          {errors.questions[index].options}
+                      <textarea
+                        id={`description-${index}`}
+                        name="description"
+                        value={question.description}
+                        onChange={(e) => handleQuestionChangeWithErrors(index, e)}
+                        className={`mt-1 w-full p-2 bg-form-card border ${
+                          errors.questions?.[index]?.description ? 'border-form-error' : 'border-form-border'
+                        } rounded-md text-form-text focus:ring-2 focus:ring-form-blue focus:border-form-blue transition-all`}
+                        rows={2}
+                        required
+                        aria-describedby={`description-error-${index}`}
+                      />
+                      {errors.questions?.[index]?.description && (
+                        <p id={`description-error-${index}`} className="mt-1 text-sm text-form-error">
+                          {errors.questions[index].description}
                         </p>
                       )}
-                      <div className="mt-2 space-y-2">
-                        {newOptionInputs[index]?.map((input, optionIndex) => (
-                          <div key={optionIndex} className="flex items-center space-x-2">
-                            <input
-                              type="text"
-                              value={input}
-                              onChange={(e) =>
-                                handleNewOptionInput(index, optionIndex, e.target.value)
-                              }
-                              className="flex-1 p-2 bg-white/5 border border-neon-pink rounded-md text-white focus:ring-2 focus:ring-neon-cyan focus:border-neon-cyan focus:shadow-neon-cyan transition-all"
-                              placeholder={`Option ${optionIndex + 1}`}
-                            />
-                            {optionIndex > 0 && (
-                              <button
-                                type="button"
-                                onClick={() => removeOptionInput(index, optionIndex)}
-                                className="w-8 h-8 flex items-center justify-center border border-neon-pink rounded-full text-neon-pink hover:bg-neon-pink hover:text-white hover:shadow-neon-pink transition-all"
-                                aria-label="Remove Checkbox Option"
-                              >
-                                −
-                              </button>
-                            )}
-                            {optionIndex === newOptionInputs[index].length - 1 && (
-                              <button
-                                type="button"
-                                onClick={() => addCheckboxOption(index)}
-                                className="w-8 h-8 flex items-center justify-center border border-neon-pink rounded-full text-neon-pink hover:bg-neon-pink hover:text-white hover:shadow-neon-pink transition-all"
-                                aria-label="Add Checkbox Option"
-                              >
-                                +
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                      {question.checkboxOptions && Array.isArray(question.checkboxOptions) && question.checkboxOptions.length > 0 && (
-                        <div className="mt-2 space-y-1">
-                          {question.checkboxOptions.map((option: string, i: number) => (
-                            <div key={i} className="flex items-center space-x-2">
-                              <input
-                                type="checkbox"
-                                checked={checkboxStates[index][i]}
-                                onChange={() => handleCheckboxChange(index, i)}
-                                className="h-4 w-4 text-neon-pink border-neon-pink rounded focus:ring-neon-cyan focus:shadow-neon-cyan"
-                              />
-                              <span className="text-white">{option}</span>
-                              <button
-                                type="button"
-                                onClick={() => removeCheckboxOption(index, i)}
-                                className="w-8 h-8 flex items-center justify-center border border-neon-pink text-neon-pink rounded-full hover:bg-neon-pink hover:text-white hover:shadow-neon-pink transition-all"
-                                aria-label="Remove Checkbox Option"
-                              >
-                                −
-                              </button>
+                    </div>
+                    {question.type === 'score' ? (
+                      <div className="mt-4">
+                        <label className="block text-sm font-medium text-form-secondary">
+                          Score Ranges
+                          <span className="ml-1 text-sm text-form-secondary">(e.g., Low: 1–3, High: 4–5)</span>
+                        </label>
+                        {errors.questions?.[index]?.scoreRanges && (
+                          <p className="mt-1 text-sm text-form-error">
+                            {errors.questions[index].scoreRanges}
+                          </p>
+                        )}
+                        <div className="mt-2 space-y-4">
+                          {scoreRangeInputs[index]?.map((range, rangeIndex) => (
+                            <div key={rangeIndex} className="flex items-center space-x-2">
+                              <div className="flex-1">
+                                <label
+                                  htmlFor={`range-title-${index}-${rangeIndex}`}
+                                  className="block text-sm font-medium text-form-secondary"
+                                >
+                                  Range Title
+                                </label>
+                                <input
+                                  type="text"
+                                  id={`range-title-${index}-${rangeIndex}`}
+                                  value={range.title}
+                                  onChange={(e) =>
+                                    handleScoreRangeInput(index, rangeIndex, 'title', e.target.value)
+                                  }
+                                  className="mt-1 w-full p-2 bg-form-card border border-form-border rounded-md text-form-text focus:ring-2 focus:ring-form-blue focus:border-form-blue transition-all"
+                                  placeholder={`Range ${rangeIndex + 1} Title`}
+                                  aria-label={`Score range ${rangeIndex + 1} title`}
+                                />
+                              </div>
+                              <div className="w-20">
+                                <label
+                                  htmlFor={`min-${index}-${rangeIndex}`}
+                                  className="block text-sm font-medium text-form-secondary"
+                                >
+                                  Start Range
+                                </label>
+                                <input
+                                  type="text"
+                                  pattern="[0-9]*"
+                                  id={`min-${index}-${rangeIndex}`}
+                                  value={range.min === '' ? '' : range.min}
+                                  onChange={(e) =>
+                                    handleScoreRangeInput(index, rangeIndex, 'min', e.target.value)
+                                  }
+                                  onBlur={() => handleScoreRangeBlur(index, rangeIndex, 'min')}
+                                  className="mt-1 w-full p-2 bg-form-card border border-form-border rounded-md text-form-text focus:ring-2 focus:ring-form-blue focus:border-form-blue transition-all"
+                                  placeholder="Start"
+                                  aria-label={`Score range ${rangeIndex + 1} start`}
+                                />
+                              </div>
+                              <div className="w-20">
+                                <label
+                                  htmlFor={`max-${index}-${rangeIndex}`}
+                                  className="block text-sm font-medium text-form-secondary"
+                                >
+                                  End Range
+                                </label>
+                                <input
+                                  type="text"
+                                  pattern="[0-9]*"
+                                  id={`max-${index}-${rangeIndex}`}
+                                  value={range.max === '' ? '' : range.max}
+                                  onChange={(e) =>
+                                    handleScoreRangeInput(index, rangeIndex, 'max', e.target.value)
+                                  }
+                                  onBlur={() => handleScoreRangeBlur(index, rangeIndex, 'max')}
+                                  className="mt-1 w-full p-2 bg-form-card border border-form-border rounded-md text-form-text focus:ring-2 focus:ring-form-blue focus:border-form-blue transition-all"
+                                  placeholder="End"
+                                  aria-label={`Score range ${rangeIndex + 1} end`}
+                                />
+                              </div>
+                              {rangeIndex > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeScoreRangeInput(index, rangeIndex)}
+                                  className="w-8 h-8 flex items-center justify-center border border-form-border text-form-secondary rounded-full hover:bg-form-blue-light hover:text-form-blue transition-all"
+                                  aria-label={`Remove score range ${rangeIndex + 1}`}
+                                >
+                                  −
+                                </button>
+                              )}
+                              {rangeIndex === scoreRangeInputs[index].length - 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => addScoreRange(index)}
+                                  className="w-8 h-8 flex items-center justify-center border border-form-border text-form-secondary rounded-full hover:bg-form-blue-light hover:text-form-blue transition-all"
+                                  aria-label="Add score range"
+                                >
+                                  +
+                                </button>
+                              )}
                             </div>
                           ))}
                         </div>
-                      )}
+                      </div>
+                    ) : (
+                      <div className="mt-4">
+                        <label className="block text-sm font-medium text-form-secondary">
+                          Checkbox Options
+                          <span className="ml-1 text-sm text-form-secondary">(e.g., Option 1, Option 2)</span>
+                        </label>
+                        {errors.questions?.[index]?.options && (
+                          <p className="mt-1 text-sm text-form-error">
+                            {errors.questions[index].options}
+                          </p>
+                        )}
+                        <div className="mt-2 space-y-2">
+                          {newOptionInputs[index]?.map((input, optionIndex) => (
+                            <div key={optionIndex} className="flex items-center space-x-2">
+                              <input
+                                type="text"
+                                value={input}
+                                onChange={(e) =>
+                                  handleNewOptionInput(index, optionIndex, e.target.value)
+                                }
+                                className="flex-1 p-2 bg-form-card border border-form-border rounded-md text-form-text focus:ring-2 focus:ring-form-blue focus:border-form-blue transition-all"
+                                placeholder={`Option ${optionIndex + 1}`}
+                                aria-label={`Checkbox option ${optionIndex + 1}`}
+                              />
+                              {optionIndex > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeOptionInput(index, optionIndex)}
+                                  className="w-8 h-8 flex items-center justify-center border border-form-border rounded-full text-form-secondary hover:bg-form-blue-light hover:text-form-blue transition-all"
+                                  aria-label={`Remove checkbox option ${optionIndex + 1}`}
+                                >
+                                  −
+                                </button>
+                              )}
+                              {optionIndex === newOptionInputs[index].length - 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => addCheckboxOption(index)}
+                                  className="w-8 h-8 flex items-center justify-center border border-form-border rounded-full text-form-secondary hover:bg-form-blue-light hover:text-form-blue transition-all"
+                                  aria-label="Add checkbox option"
+                                >
+                                  +
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        {question.checkboxOptions && Array.isArray(question.checkboxOptions) && question.checkboxOptions.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {question.checkboxOptions.map((option: string, i: number) => (
+                              <div key={i} className="flex items-center space-x-2">
+                                <input
+                                  type="checkbox"
+                                  checked={checkboxStates[index][i]}
+                                  onChange={() => handleCheckboxChange(index, i)}
+                                  className="h-4 w-4 text-form-blue border-form-border rounded focus:ring-form-blue"
+                                  aria-label={`Checkbox option: ${option}`}
+                                />
+                                <span className="text-form-text">{option}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => removeCheckboxOption(index, i)}
+                                  className="w-8 h-8 flex items-center justify-center border border-form-border text-form-secondary rounded-full hover:bg-form-blue-light hover:text-form-blue transition-all"
+                                  aria-label={`Remove checkbox option: ${option}`}
+                                >
+                                  −
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div className="mt-4 flex items-center space-x-4">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          name="isRequired"
+                          checked={question.isRequired}
+                          onChange={(e) => handleQuestionChangeWithErrors(index, e)}
+                          className="h-4 w-4 text-form-blue border-form-border rounded focus:ring-form-blue"
+                          aria-label="Mark question as required"
+                        />
+                        <span className="ml-2 text-sm text-form-secondary">Required</span>
+                      </label>
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          name="hasComments"
+                          checked={question.hasComments}
+                          onChange={(e) => handleQuestionChangeWithErrors(index, e)}
+                          className="h-4 w-4 text-form-blue border-form-border rounded focus:ring-form-blue"
+                          aria-label="Allow comments for question"
+                        />
+                        <span className="ml-2 text-sm text-form-secondary">Allow Comments</span>
+                      </label>
                     </div>
-                  )}
-                  <div className="mt-4 flex items-center space-x-4">
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        name="isRequired"
-                        checked={question.isRequired}
-                        onChange={(e) => handleQuestionChangeWithErrors(index, e)}
-                        className="h-4 w-4 text-neon-pink border-neon-pink rounded focus:ring-neon-cyan focus:shadow-neon-cyan"
-                      />
-                      <span className="ml-2 text-sm text-neon-cyan">Required</span>
-                    </label>
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        name="hasComments"
-                        checked={question.hasComments}
-                        onChange={(e) => handleQuestionChangeWithErrors(index, e)}
-                        className="h-4 w-4 text-neon-pink border-neon-pink rounded focus:ring-neon-cyan focus:shadow-neon-cyan"
-                      />
-                      <span className="ml-2 text-sm text-neon-cyan">Allow Comments</span>
-                    </label>
+                    {formData.questions.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeQuestion(index, setErrors)}
+                        className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center border border-form-border text-form-secondary rounded-full hover:bg-form-blue-light hover:text-form-blue transition-all"
+                        aria-label="Remove question"
+                      >
+                        ×
+                      </button>
+                    )}
                   </div>
-                  {formData.questions.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeQuestion(index, setErrors)}
-                      className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center border border-neon-pink text-neon-pink rounded-full hover:bg-neon-pink hover:text-white hover:shadow-neon-pink transition-all"
-                      aria-label="Remove Question"
-                    >
-                      ×
-                    </button>
-                  )}
+                ))}
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={addQuestion}
+                    className="w-12 h-12 bg-form-blue text-white rounded-full hover:bg-form-blue-light hover:text-form-blue transition-all"
+                    aria-label="Add new question"
+                  >
+                    +
+                  </button>
                 </div>
-              ))}
-              <div className="text-center">
+              </section>
+
+              <div className="mt-8 flex justify-center space-x-4">
                 <button
                   type="button"
-                  onClick={addQuestion}
-                  className="w-12 h-12 bg-neon-pink text-white rounded-full hover:bg-neon-pink/80 hover:shadow-neon-pink-lg transition-all"
-                  aria-label="Add Question"
+                  onClick={handleReset}
+                  className="px-6 py-2 border border-form-border text-form-secondary rounded-md hover:bg-form-blue-light hover:text-form-blue transition-all"
+                  aria-label="Clear form"
                 >
-                  +
+                  Clear Form
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2 bg-form-blue text-white rounded-md hover:bg-form-blue-light hover:text-form-blue transition-all disabled:opacity-50 relative"
+                  disabled={isSubmitting}
+                  aria-label={formData.id ? 'Update form' : 'Save form'}
+                >
+                  {isSubmitting ? (
+                    <span className="flex items-center">
+                      <svg
+                        className="animate-spin h-5 w-5 mr-2 text-white"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        />
+                      </svg>
+                      Saving...
+                    </span>
+                  ) : (
+                    formData.id ? 'Update Form' : 'Save Form'
+                  )}
                 </button>
               </div>
-            </section>
-
-            <div className="mt-8 text-center">
-              <button
-                type="submit"
-                className="px-6 py-2 bg-neon-pink text-white rounded-md hover:bg-neon-pink/80 hover:shadow-neon-pink-lg transition-all disabled:opacity-50 relative"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <span className="flex items-center">
-                    <svg
-                      className="animate-spin h-5 w-5 mr-2 text-white"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    Saving...
-                  </span>
-                ) : (
-                  formData.id ? 'Update Form' : 'Save Form'
-                )}
-              </button>
-            </div>
-          </form>
+            </form>
+          )}
         </div>
       </main>
     </ErrorBoundary>
